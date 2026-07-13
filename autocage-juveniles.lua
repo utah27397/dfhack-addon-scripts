@@ -4,6 +4,8 @@
 -- Automatically cage juvenile animals and release them when they mature.
 
 local repeat_util = require('repeat-util')
+local overlay = require('plugins.overlay')
+local widgets = require('gui.widgets')
 
 local CONFIG_KEY = 'autocage-juveniles/config'
 local SCHEDULE_NAME = 'autocage-juveniles'
@@ -83,6 +85,7 @@ function is_cage_candidate(unit)
         dfhack.units.isOwnCiv(unit) and
         dfhack.units.isAlive(unit) and
         not dfhack.units.isMerchant(unit) and
+        not dfhack.units.isMarkedForSlaughter(unit) and
         not has_owner(unit) and
         not dfhack.units.isGrazer(unit) and
         (dfhack.units.isBaby(unit) or dfhack.units.isChild(unit))
@@ -90,7 +93,8 @@ end
 
 function should_release(unit)
     return not unit or not dfhack.units.isAlive(unit) or has_owner(unit) or
-        dfhack.units.isGrazer(unit) or dfhack.units.isAdult(unit)
+        dfhack.units.isGrazer(unit) or dfhack.units.isAdult(unit) or
+        dfhack.units.isMarkedForSlaughter(unit)
 end
 
 local function assigned_unit_ids()
@@ -238,14 +242,109 @@ local function print_status()
     end
 end
 
-if dfhack_flags.module then return end
+local function selected_cage()
+    local building = dfhack.gui.getSelectedBuilding(true)
+    if building and building:getType() == df.building_type.Cage then
+        return building
+    end
+end
+
+local function pasture_for_cage(cage)
+    if not cage then return nil end
+    for _, building in ipairs(df.global.world.buildings.all) do
+        if is_pasture(building) and building.z == cage.z and
+                dfhack.buildings.containsTile(
+                    building, cage.x1, cage.y1, false) then
+            return building
+        end
+    end
+end
+
+local function cage_pasture_state()
+    local zone = pasture_for_cage(selected_cage())
+    local config = get_config()
+    local enabled = zone and config and config.ints[1] == zone.id and
+        config.ints[2] == 1
+    return zone, enabled
+end
+
+local function in_cage_interface()
+    if not selected_cage() then return false end
+    local focus = dfhack.gui.getFocusString()
+    return focus:sub(1, #'dwarfmode/QueryBuilding/Some/Cage') ==
+            'dwarfmode/QueryBuilding/Some/Cage' or
+        focus:sub(1, #'dwarfmode/QueryBuilding/Some/Assign') ==
+            'dwarfmode/QueryBuilding/Some/Assign'
+end
+
+local function toggle_selected_cage_pasture()
+    local zone, enabled = cage_pasture_state()
+    if not zone then return end
+    if enabled then
+        set_enabled(false)
+        return
+    end
+    save_config(zone.id, true)
+    startup_enabled = true
+    repeat_util.cancel(SCHEDULE_NAME)
+    repeat_util.scheduleEvery(
+        SCHEDULE_NAME, CHECK_INTERVAL, CHECK_UNITS,
+        function() run_cycle(true) end)
+    run_cycle(true)
+    print(('autocage-juveniles: managing cage pasture #%d'):format(zone.id))
+end
+
+CageAutocageOverlay = defclass(CageAutocageOverlay, overlay.OverlayWidget)
+CageAutocageOverlay.ATTRS{
+    default_pos={x=2, y=8},
+    viewscreens='dwarfmode',
+    frame={w=32, h=2},
+}
+
+function CageAutocageOverlay:init()
+    self:addviews{
+        widgets.HotkeyLabel{
+            frame={t=0, l=0},
+            key='CUSTOM_CTRL_J',
+            label=function()
+                local zone, enabled = cage_pasture_state()
+                if not zone then return 'Juvenile autocaging unavailable' end
+                return enabled and 'Disable juvenile autocaging' or
+                    'Enable juvenile autocaging'
+            end,
+            on_activate=toggle_selected_cage_pasture,
+        },
+        widgets.Label{
+            frame={t=1, l=0, w=32},
+            text=function()
+                local zone = pasture_for_cage(selected_cage())
+                return zone and ('Cage pasture #%d'):format(zone.id) or
+                    'Place a pasture over this cage'
+            end,
+        },
+    }
+end
+
+
+function CageAutocageOverlay:render(dc)
+    if in_cage_interface() then
+        CageAutocageOverlay.super.render(self, dc)
+    end
+end
+
+function CageAutocageOverlay:onInput(keys)
+    if not in_cage_interface() then return false end
+    return CageAutocageOverlay.super.onInput(self, keys)
+end
+
+OVERLAY_WIDGETS = {cage_autocage=CageAutocageOverlay}
 
 dfhack.onStateChange.autocageJuveniles = function(code)
-    if code == SC_MAP_LOADED and startup_enabled then
+    if code == SC_MAP_LOADED then
         local config = get_config()
-        if config and config.ints[1] >= 0 then
-            config.ints[2] = 1
-            config:save()
+        startup_enabled = config and config.ints[2] == 1 or false
+        if startup_enabled and config.ints[1] >= 0 then
+            repeat_util.cancel(SCHEDULE_NAME)
             repeat_util.scheduleEvery(
                 SCHEDULE_NAME, CHECK_INTERVAL, CHECK_UNITS,
                 function() run_cycle(true) end)
@@ -254,6 +353,19 @@ dfhack.onStateChange.autocageJuveniles = function(code)
         repeat_util.cancel(SCHEDULE_NAME)
     end
 end
+
+if dfhack.isMapLoaded() then
+    local config = get_config()
+    startup_enabled = config and config.ints[2] == 1 or false
+    if startup_enabled and configured_zone() then
+        repeat_util.cancel(SCHEDULE_NAME)
+        repeat_util.scheduleEvery(
+            SCHEDULE_NAME, CHECK_INTERVAL, CHECK_UNITS,
+            function() run_cycle(true) end)
+    end
+end
+
+if dfhack_flags.module then return end
 
 local args = {...}
 local command = args[1]
