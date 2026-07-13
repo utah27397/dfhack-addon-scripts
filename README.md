@@ -1,6 +1,7 @@
-# DFHack Addon Scripts for 0.47.05-r8
+# DFHack Addon Scripts
 
-Additional DFHack scripts for Dwarf Fortress 0.47.05 and DFHack 0.47.05-r8.
+Additional scripts for current DFHack releases. The `0.47.05-r8` branch contains
+versions adapted for Dwarf Fortress 0.47.05 and DFHack 0.47.05-r8.
 
 ## Juvenile autocaging
 
@@ -33,12 +34,8 @@ You can also provide the zone's building ID explicitly:
 autocage-juveniles set 123
 ```
 
-The zone ID is stored in the fortress save. To enable the script automatically
-after restarting DFHack, add this line to `dfhack.init`:
-
-```text
-enable autocage-juveniles
-```
+The zone ID and enabled state are stored per fortress. Once enabled, the script
+resumes automatically when that fortress is loaded again.
 
 ### Commands
 
@@ -52,10 +49,11 @@ disable autocage-juveniles   Stop monthly checks
 Only cages built inside the configured pasture are managed. The script balances
 new assignments across those cages and leaves cages elsewhere untouched.
 
-## Compatibility
+## Older DFHack
 
-These scripts target DFHack 0.47.05-r8. They are not intended for current DFHack
-releases, whose APIs and built-in tools differ.
+`main` targets the current stable DFHack API. For DFHack 0.47.05-r8, use the
+[`0.47.05-r8`](../../tree/0.47.05-r8) branch; its README includes the startup
+instructions required by that release.
 
 ## License
 

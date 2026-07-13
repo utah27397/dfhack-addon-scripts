@@ -4,13 +4,18 @@
 -- Automatically cage juvenile animals and release them when they mature.
 
 local repeat_util = require('repeat-util')
+local utils = require('utils')
 
-local CONFIG_KEY = 'autocage-juveniles/config'
+local CONFIG_KEY = 'autocage-juveniles'
 local SCHEDULE_NAME = 'autocage-juveniles'
 local CHECK_INTERVAL = 1
 local CHECK_UNITS = 'months'
 
-startup_enabled = startup_enabled or false
+local function get_default_state()
+    return {enabled = false, zone_id = -1}
+end
+
+state = state or get_default_state()
 
 local help = [====[
 autocage-juveniles
@@ -30,28 +35,22 @@ Usage:
 With no zone ID, "set" uses the pen/pasture selected in the game UI.
 ]====]
 
-local function get_config()
-    if not dfhack.isWorldLoaded() then return nil end
-    return dfhack.persistent.get(CONFIG_KEY)
+local function load_state()
+    state = get_default_state()
+    utils.assign(state, dfhack.persistent.getSiteData(CONFIG_KEY, state))
 end
 
-local function save_config(zone_id, enabled)
-    return dfhack.persistent.save{
-        key = CONFIG_KEY,
-        ints = {zone_id, enabled and 1 or 0},
-    }
+local function persist_state()
+    dfhack.persistent.saveSiteData(CONFIG_KEY, state)
 end
 
 local function configured_zone()
-    local config = get_config()
-    if not config or config.ints[1] < 0 then return nil end
-    return df.building.find(config.ints[1])
+    if state.zone_id < 0 then return nil end
+    return df.building.find(state.zone_id)
 end
 
 local function is_pasture(building)
-    return building and
-        building:getType() == df.building_type.Civzone and
-        building.zone_flags.pen_pasture
+    return building and dfhack.buildings.isPenPasture(building)
 end
 
 local function validate_zone(building)
@@ -65,8 +64,7 @@ local function cages_in_zone(zone)
     for _, building in ipairs(df.global.world.buildings.all) do
         if building:getType() == df.building_type.Cage and
                 building.z == zone.z and
-                building.x1 >= zone.x1 and building.x1 <= zone.x2 and
-                building.y1 >= zone.y1 and building.y1 <= zone.y2 and
+                dfhack.buildings.containsTile(zone, building.x1, building.y1) and
                 building:getBuildStage() == building:getMaxBuildStage() then
             table.insert(cages, building)
         end
@@ -74,23 +72,20 @@ local function cages_in_zone(zone)
     return cages
 end
 
-local function has_owner(unit)
-    return unit.relationship_ids[df.unit_relationship_type.Pet] ~= -1
-end
-
 function is_cage_candidate(unit)
     return dfhack.units.isAnimal(unit) and
         dfhack.units.isOwnCiv(unit) and
         dfhack.units.isAlive(unit) and
         not dfhack.units.isMerchant(unit) and
-        not has_owner(unit) and
+        not dfhack.units.isPet(unit) and
         not dfhack.units.isGrazer(unit) and
         (dfhack.units.isBaby(unit) or dfhack.units.isChild(unit))
 end
 
 function should_release(unit)
-    return not unit or not dfhack.units.isAlive(unit) or has_owner(unit) or
-        dfhack.units.isGrazer(unit) or dfhack.units.isAdult(unit)
+    return not unit or not dfhack.units.isAlive(unit) or
+        dfhack.units.isPet(unit) or dfhack.units.isGrazer(unit) or
+        dfhack.units.isAdult(unit)
 end
 
 local function assigned_unit_ids()
@@ -152,7 +147,7 @@ function run_cycle(quiet)
     if not dfhack.isMapLoaded() then return false end
 
     local zone = configured_zone()
-    if not zone or not is_pasture(zone) then
+    if not is_pasture(zone) then
         if not quiet then
             dfhack.printerr('autocage-juveniles: no valid pen/pasture is configured')
         end
@@ -162,7 +157,8 @@ function run_cycle(quiet)
     local cages = cages_in_zone(zone)
     if #cages == 0 then
         if not quiet then
-            dfhack.printerr('autocage-juveniles: the configured pasture contains no completed cages')
+            dfhack.printerr(
+                'autocage-juveniles: the configured pasture contains no completed cages')
         end
         return false
     end
@@ -176,60 +172,62 @@ function run_cycle(quiet)
     return true
 end
 
-local function set_enabled(enabled)
-    startup_enabled = enabled
+local function start()
     repeat_util.cancel(SCHEDULE_NAME)
+    if not state.enabled then return end
 
-    local config = get_config()
-    if config then
-        config.ints[2] = enabled and 1 or 0
-        config:save()
+    local zone = configured_zone()
+    if not is_pasture(zone) then
+        dfhack.printerr(
+            'autocage-juveniles: disabled until a valid pen/pasture is configured')
+        return
     end
 
-    if enabled and dfhack.isMapLoaded() then
-        if not configured_zone() then
+    repeat_util.scheduleEvery(
+        SCHEDULE_NAME, CHECK_INTERVAL, CHECK_UNITS,
+        function() run_cycle(true) end)
+end
+
+local function set_enabled(enabled)
+    if enabled then
+        local zone = configured_zone()
+        if not is_pasture(zone) then
             qerror('Configure a pen/pasture first with: autocage-juveniles set')
         end
-        repeat_util.scheduleEvery(
-            SCHEDULE_NAME, CHECK_INTERVAL, CHECK_UNITS,
-            function() run_cycle(true) end)
+        if #cages_in_zone(zone) == 0 then
+            qerror('The configured pasture must contain at least one completed cage.')
+        end
     end
 
+    state.enabled = enabled
+    start()
+    persist_state()
     print('autocage-juveniles is ' .. (enabled and 'enabled' or 'disabled'))
 end
 
 local function set_zone(zone_id)
-    if not dfhack.isMapLoaded() then qerror('A fortress map must be loaded.') end
-
     local zone
     if zone_id then
         local parsed_id = tonumber(zone_id)
         if not parsed_id then qerror('Zone ID must be a number.') end
         zone = df.building.find(parsed_id)
     else
-        zone = dfhack.gui.getSelectedBuilding(true)
+        zone = dfhack.gui.getSelectedCivZone(true)
     end
     validate_zone(zone)
 
-    local old = get_config()
-    local enabled = old and old.ints[2] == 1 or false
-    save_config(zone.id, enabled)
+    state.zone_id = zone.id
+    persist_state()
     print(('autocage-juveniles: using pen/pasture #%d with %d completed cage(s)')
         :format(zone.id, #cages_in_zone(zone)))
 end
 
 local function print_status()
-    if not dfhack.isWorldLoaded() then
-        print('autocage-juveniles: no world is loaded')
-        return
-    end
-    local config = get_config()
     local zone = configured_zone()
-    local enabled = repeat_util.repeating[SCHEDULE_NAME] ~= nil
-    print('autocage-juveniles is ' .. (enabled and 'enabled' or 'disabled'))
-    if config then
+    print('autocage-juveniles is ' .. (state.enabled and 'enabled' or 'disabled'))
+    if state.zone_id >= 0 then
         print(('Configured zone: #%d%s'):format(
-            config.ints[1], is_pasture(zone) and '' or ' (missing or invalid)'))
+            state.zone_id, is_pasture(zone) and '' or ' (missing or invalid)'))
         if is_pasture(zone) then
             print(('Completed cages in zone: %d'):format(#cages_in_zone(zone)))
         end
@@ -238,22 +236,26 @@ local function print_status()
     end
 end
 
-if dfhack_flags.module then return end
+function isEnabled()
+    return state.enabled
+end
 
-dfhack.onStateChange.autocageJuveniles = function(code)
-    if code == SC_MAP_LOADED and startup_enabled then
-        local config = get_config()
-        if config and config.ints[1] >= 0 then
-            config.ints[2] = 1
-            config:save()
-            repeat_util.scheduleEvery(
-                SCHEDULE_NAME, CHECK_INTERVAL, CHECK_UNITS,
-                function() run_cycle(true) end)
-        end
+dfhack.onStateChange[CONFIG_KEY] = function(code)
+    if code == SC_MAP_LOADED and dfhack.world.isFortressMode() then
+        load_state()
+        start()
     elseif code == SC_MAP_UNLOADED then
         repeat_util.cancel(SCHEDULE_NAME)
     end
 end
+
+if dfhack_flags.module then return end
+
+if not dfhack.isMapLoaded() or not dfhack.world.isFortressMode() then
+    qerror('A loaded fortress map is required.')
+end
+
+load_state()
 
 local args = {...}
 local command = args[1]
