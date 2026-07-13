@@ -59,7 +59,7 @@ end
 
 for _, name in ipairs{
     'isAnimal', 'isOwnCiv', 'isAlive', 'isMerchant', 'isGrazer',
-    'isBaby', 'isChild', 'isAdult', 'isMarkedForSlaughter',
+    'isBaby', 'isChild', 'isAdult',
 } do
     flag(name)
 end
@@ -86,13 +86,13 @@ assert(not is_cage_candidate(animal{isGrazer=true}))
 assert(not is_cage_candidate(animal{isAdult=true, isChild=false}))
 assert(not is_cage_candidate(animal{relationship_ids={[1]=42}}))
 assert(not is_cage_candidate(animal{isMerchant=true}))
-assert(not is_cage_candidate(animal{isMarkedForSlaughter=true}))
+assert(is_cage_candidate(animal{isMarkedForSlaughter=true}))
 
 assert(should_release(animal{isAdult=true, isChild=false}))
 assert(should_release(animal{isGrazer=true}))
 assert(should_release(animal{relationship_ids={[1]=42}}))
 assert(should_release(animal{isAlive=false}))
-assert(should_release(animal{isMarkedForSlaughter=true}))
+assert(not should_release(animal{isMarkedForSlaughter=true}))
 assert(not should_release(animal()))
 
 local either_female = {race=7, sex=-1}
@@ -101,7 +101,7 @@ assert(matches_rule(animal{isAdult=true, isChild=false}, either_female))
 assert(not matches_rule(animal{isAdult=true, isChild=false}, male_only))
 assert(matches_rule(animal{isAdult=true, isChild=false, sex=1}, male_only))
 assert(not matches_rule(animal{isAdult=true, isChild=false, race=8}, either_female))
-assert(not matches_rule(animal{
+assert(matches_rule(animal{
     isAdult=true, isChild=false, isMarkedForSlaughter=true}, either_female))
 
 print('selection tests passed')

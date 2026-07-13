@@ -68,7 +68,6 @@ function matches_rule(unit, rule)
         dfhack.units.isAlive(unit) and
         dfhack.units.isAdult(unit) and
         not dfhack.units.isMerchant(unit) and
-        not dfhack.units.isMarkedForSlaughter(unit) and
         unit.race == rule.race and
         (rule.sex == -1 or unit.sex == rule.sex)
 end

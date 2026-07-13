@@ -85,7 +85,6 @@ function is_cage_candidate(unit)
         dfhack.units.isOwnCiv(unit) and
         dfhack.units.isAlive(unit) and
         not dfhack.units.isMerchant(unit) and
-        not dfhack.units.isMarkedForSlaughter(unit) and
         not has_owner(unit) and
         not dfhack.units.isGrazer(unit) and
         (dfhack.units.isBaby(unit) or dfhack.units.isChild(unit))
@@ -93,8 +92,7 @@ end
 
 function should_release(unit)
     return not unit or not dfhack.units.isAlive(unit) or has_owner(unit) or
-        dfhack.units.isGrazer(unit) or dfhack.units.isAdult(unit) or
-        dfhack.units.isMarkedForSlaughter(unit)
+        dfhack.units.isGrazer(unit) or dfhack.units.isAdult(unit)
 end
 
 local function assigned_unit_ids()

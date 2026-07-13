@@ -23,9 +23,8 @@ species and choose whether the pasture accepts females, males, or either sex.
 The rule is stored in the fortress save and checked once per in-game month.
 
 The script assigns only adult animals belonging to your civilization. It skips
-animals already assigned to a pasture, cage, or restraint, along with merchants
-and animals marked for slaughter. Sex-specific pasture rules take precedence
-over rules that accept either sex.
+animals already assigned to a pasture, cage, or restraint, along with merchants.
+Sex-specific pasture rules take precedence over rules that accept either sex.
 
 DFHack 0.47.05-r8 cannot construct the old pasture-assignment reference from
 scratch. If no animal has ever been assigned to a pasture in the current save,
@@ -39,9 +38,10 @@ cages in that pasture are managed as one balanced pool. Use the same control to
 disable it.
 
 The script cages juvenile animals and releases their assignments when they
-become adults. Grazers, merchants, owned pets, and animals marked for slaughter
-are not caged. Grazers, pets, adults, dead animals, and slaughter-marked animals
-already assigned to a managed cage are released on the next monthly check.
+become adults. Grazers, merchants, and owned pets are not caged. Grazers, pets,
+adults, and dead animals already assigned to a managed cage are released on the
+next monthly check. Slaughter designations do not exclude animals from adult
+pasture or juvenile cage rules.
 
 This compatibility branch manages one cage pasture at a time. Enabling the
 control from a cage in another pasture moves juvenile autocaging to that
