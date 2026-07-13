@@ -31,8 +31,9 @@ pasture becomes part of the managed cage pool.
 
 Once per in-game month, juvenile animals are distributed across managed cages.
 Their cage assignment is removed when they become adults. Grazers, merchants,
-animals with owners, and animals marked for slaughter are never caged. Any of
-those animals already assigned to managed cages are released on the next check.
+and animals with owners are never caged. Any of those animals already assigned
+to managed cages are released on the next check. Slaughter designations do not
+exclude animals from adult pasture or juvenile cage rules.
 
 Rules and enabled cage pastures are stored per fortress and resume automatically
 when that fortress is loaded again.
