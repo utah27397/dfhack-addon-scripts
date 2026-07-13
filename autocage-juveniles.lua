@@ -5,6 +5,8 @@
 
 local repeat_util = require('repeat-util')
 local utils = require('utils')
+local overlay = require('plugins.overlay')
+local widgets = require('gui.widgets')
 
 local CONFIG_KEY = 'autocage-juveniles'
 local SCHEDULE_NAME = 'autocage-juveniles'
@@ -12,7 +14,7 @@ local CHECK_INTERVAL = 1
 local CHECK_UNITS = 'months'
 
 local function get_default_state()
-    return {enabled = false, zone_id = -1}
+    return {enabled = false, zone_ids = {}}
 end
 
 state = state or get_default_state()
@@ -37,16 +39,16 @@ With no zone ID, "set" uses the pen/pasture selected in the game UI.
 
 local function load_state()
     state = get_default_state()
-    utils.assign(state, dfhack.persistent.getSiteData(CONFIG_KEY, state))
+    local persisted = dfhack.persistent.getSiteData(CONFIG_KEY, state)
+    utils.assign(state, persisted)
+    if persisted.zone_id and persisted.zone_id >= 0 then
+        state.zone_ids[tostring(persisted.zone_id)] = true
+        state.zone_id = nil
+    end
 end
 
 local function persist_state()
     dfhack.persistent.saveSiteData(CONFIG_KEY, state)
-end
-
-local function configured_zone()
-    if state.zone_id < 0 then return nil end
-    return df.building.find(state.zone_id)
 end
 
 local function is_pasture(building)
@@ -72,11 +74,28 @@ local function cages_in_zone(zone)
     return cages
 end
 
+local function get_managed_cages()
+    local cages, seen = {}, {}
+    for zone_id, managed in pairs(state.zone_ids) do
+        local zone = managed and df.building.find(tonumber(zone_id))
+        if is_pasture(zone) then
+            for _, cage in ipairs(cages_in_zone(zone)) do
+                if not seen[cage.id] then
+                    seen[cage.id] = true
+                    table.insert(cages, cage)
+                end
+            end
+        end
+    end
+    return cages
+end
+
 function is_cage_candidate(unit)
     return dfhack.units.isAnimal(unit) and
         dfhack.units.isOwnCiv(unit) and
         dfhack.units.isAlive(unit) and
         not dfhack.units.isMerchant(unit) and
+        not dfhack.units.isMarkedForSlaughter(unit) and
         not dfhack.units.isPet(unit) and
         not dfhack.units.isGrazer(unit) and
         (dfhack.units.isBaby(unit) or dfhack.units.isChild(unit))
@@ -84,8 +103,8 @@ end
 
 function should_release(unit)
     return not unit or not dfhack.units.isAlive(unit) or
-        dfhack.units.isPet(unit) or dfhack.units.isGrazer(unit) or
-        dfhack.units.isAdult(unit)
+        dfhack.units.isMarkedForSlaughter(unit) or dfhack.units.isPet(unit) or
+        dfhack.units.isGrazer(unit) or dfhack.units.isAdult(unit)
 end
 
 local function assigned_unit_ids()
@@ -146,19 +165,11 @@ end
 function run_cycle(quiet)
     if not dfhack.isMapLoaded() then return false end
 
-    local zone = configured_zone()
-    if not is_pasture(zone) then
-        if not quiet then
-            dfhack.printerr('autocage-juveniles: no valid pen/pasture is configured')
-        end
-        return false
-    end
-
-    local cages = cages_in_zone(zone)
+    local cages = get_managed_cages()
     if #cages == 0 then
         if not quiet then
             dfhack.printerr(
-                'autocage-juveniles: the configured pasture contains no completed cages')
+                'autocage-juveniles: no completed cages are in managed pastures')
         end
         return false
     end
@@ -176,10 +187,9 @@ local function start()
     repeat_util.cancel(SCHEDULE_NAME)
     if not state.enabled then return end
 
-    local zone = configured_zone()
-    if not is_pasture(zone) then
+    if #get_managed_cages() == 0 then
         dfhack.printerr(
-            'autocage-juveniles: disabled until a valid pen/pasture is configured')
+            'autocage-juveniles: disabled until a managed pasture contains a cage')
         return
     end
 
@@ -190,12 +200,8 @@ end
 
 local function set_enabled(enabled)
     if enabled then
-        local zone = configured_zone()
-        if not is_pasture(zone) then
-            qerror('Configure a pen/pasture first with: autocage-juveniles set')
-        end
-        if #cages_in_zone(zone) == 0 then
-            qerror('The configured pasture must contain at least one completed cage.')
+        if #get_managed_cages() == 0 then
+            qerror('Mark a caged pasture first from a cage interface.')
         end
     end
 
@@ -216,25 +222,90 @@ local function set_zone(zone_id)
     end
     validate_zone(zone)
 
-    state.zone_id = zone.id
+    state.zone_ids[tostring(zone.id)] = true
+    state.enabled = true
     persist_state()
+    start()
     print(('autocage-juveniles: using pen/pasture #%d with %d completed cage(s)')
         :format(zone.id, #cages_in_zone(zone)))
 end
 
 local function print_status()
-    local zone = configured_zone()
     print('autocage-juveniles is ' .. (state.enabled and 'enabled' or 'disabled'))
-    if state.zone_id >= 0 then
-        print(('Configured zone: #%d%s'):format(
-            state.zone_id, is_pasture(zone) and '' or ' (missing or invalid)'))
-        if is_pasture(zone) then
-            print(('Completed cages in zone: %d'):format(#cages_in_zone(zone)))
+    local count = 0
+    for zone_id, managed in pairs(state.zone_ids) do
+        if managed then
+            count = count + 1
+            local zone = df.building.find(tonumber(zone_id))
+            print(('Managed pasture: #%s%s'):format(
+                zone_id, is_pasture(zone) and '' or ' (missing or invalid)'))
         end
-    else
-        print('Configured zone: none')
+    end
+    print(('Managed pastures: %d; completed cages: %d'):format(
+        count, #get_managed_cages()))
+end
+
+local function pasture_for_selected_cage()
+    local cage = dfhack.gui.getSelectedBuilding(true)
+    if not cage or cage:getType() ~= df.building_type.Cage then return end
+    for _, zone in ipairs(df.global.world.buildings.other.ZONE_PEN) do
+        if zone.z == cage.z and
+                dfhack.buildings.containsTile(zone, cage.x1, cage.y1) then
+            return zone
+        end
     end
 end
+
+local function set_selected_cage_managed(managed)
+    local zone = pasture_for_selected_cage()
+    if not zone then return end
+    state.zone_ids[tostring(zone.id)] = managed or nil
+    state.enabled = next(state.zone_ids) ~= nil
+    persist_state()
+    start()
+end
+
+CageAutocageOverlay = defclass(CageAutocageOverlay, overlay.OverlayWidget)
+CageAutocageOverlay.ATTRS{
+    desc='Controls juvenile autocaging for the pasture covering a selected cage.',
+    default_pos={x=-39, y=34},
+    default_enabled=true,
+    viewscreens='dwarfmode/ViewSheets/BUILDING/Cage',
+    frame={w=31, h=2},
+}
+
+function CageAutocageOverlay:init()
+    self:addviews{
+        widgets.ToggleHotkeyLabel{
+            view_id='managed',
+            frame={t=0, l=0, w=31, h=1},
+            label='Autocage juveniles:',
+            key='CUSTOM_CTRL_J',
+            options={
+                {label='On', value=true, pen=COLOR_GREEN},
+                {label='Off', value=false, pen=COLOR_RED},
+            },
+            enabled=function() return pasture_for_selected_cage() ~= nil end,
+            on_change=set_selected_cage_managed,
+        },
+        widgets.Label{
+            frame={t=1, l=0, w=31, h=1},
+            text=function()
+                local zone = pasture_for_selected_cage()
+                return zone and ('Cage pasture #%d'):format(zone.id) or
+                    'Place a pasture over this cage'
+            end,
+        },
+    }
+end
+
+function CageAutocageOverlay:onRenderBody(painter)
+    local zone = pasture_for_selected_cage()
+    local managed = zone and state.enabled and state.zone_ids[tostring(zone.id)] or false
+    self.subviews.managed:setOption(not not managed)
+end
+
+OVERLAY_WIDGETS = {cage_autocage=CageAutocageOverlay}
 
 function isEnabled()
     return state.enabled

@@ -3,51 +3,48 @@
 Additional scripts for current DFHack releases. The `0.47.05-r8` branch contains
 versions adapted for Dwarf Fortress 0.47.05 and DFHack 0.47.05-r8.
 
+## Install
+
+Place these files in DFHack's `hack/scripts` directory:
+
+- [`autoassign-animals.lua`](autoassign-animals.lua)
+- [`autocage-juveniles.lua`](autocage-juveniles.lua)
+
+Restart DFHack after installing them. If DFHack is already running, enter
+`enable` with no arguments once to reload available script modules and overlays.
+
+## Adult pasture assignment
+
+Select a pasture and choose **Auto-assign adults**. Select a species, choose
+female, male, or either gender, and save the rule.
+
+Each pasture can have one rule. Once per in-game month, unassigned adult animals
+that match the rule are assigned to that pasture. Existing assignments are not
+changed. When rules overlap, gender-specific rules take priority over
+either-gender rules.
+
 ## Juvenile autocaging
 
-`autocage-juveniles` assigns juvenile animals to built cages inside a designated
-pen/pasture. It checks once per in-game month and removes cage assignments when
-animals become adults.
+Build one or more cages and draw a pasture over them. Select any cage and turn
+**Autocage juveniles** on in the cage interface. Every completed cage under that
+pasture becomes part of the managed cage pool.
 
-The script never cages grazers, merchants, or animals with owners. If a grazer
-or owned pet is already assigned to one of the managed cages, the script removes
-that assignment on its next check.
+Once per in-game month, juvenile animals are distributed across managed cages.
+Their cage assignment is removed when they become adults. Grazers, merchants,
+animals with owners, and animals marked for slaughter are never caged. Any of
+those animals already assigned to managed cages are released on the next check.
 
-### Install
+Rules and enabled cage pastures are stored per fortress and resume automatically
+when that fortress is loaded again.
 
-Place [`autocage-juveniles.lua`](autocage-juveniles.lua) in DFHack's
-`hack/scripts` directory.
-
-### Configure
-
-Build one or more cages inside a pen/pasture zone. Select the zone in the game
-UI, then run:
+## Commands
 
 ```text
-autocage-juveniles set
-enable autocage-juveniles
-```
-
-You can also provide the zone's building ID explicitly:
-
-```text
-autocage-juveniles set 123
-```
-
-The zone ID and enabled state are stored per fortress. Once enabled, the script
-resumes automatically when that fortress is loaded again.
-
-### Commands
-
-```text
+autoassign-animals now       Run adult pasture rules immediately
+autoassign-animals status    Show the number of enabled pasture rules
 autocage-juveniles now       Run a check immediately
 autocage-juveniles status    Show the configuration and current state
-enable autocage-juveniles    Start monthly checks
-disable autocage-juveniles   Stop monthly checks
 ```
-
-Only cages built inside the configured pasture are managed. The script balances
-new assignments across those cages and leaves cages elsewhere untouched.
 
 ## Older DFHack
 
