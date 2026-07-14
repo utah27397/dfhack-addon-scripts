@@ -94,6 +94,10 @@ assert(not should_release(animal()))
 
 dofile('autoassign-animals.lua')
 
+local LIFE_STAGE_ADULT = 0
+local LIFE_STAGE_JUVENILE = 1
+local LIFE_STAGE_EITHER = 2
+
 assert(matches_rule(animal{race=7, sex=0, isAdult=true, isChild=false},
     {race=7, sex=0}))
 assert(matches_rule(animal{race=7, sex=1, isAdult=true, isChild=false},
@@ -107,5 +111,31 @@ assert(not matches_rule(animal{race=7, sex=0, isAdult=false, isChild=true},
 assert(matches_rule(
     animal{race=7, sex=0, isAdult=true, isChild=false, isMarkedForSlaughter=true},
     {race=7, sex=0}))
+assert(matches_rule(animal{race=7, sex=0, isAdult=false, isChild=true},
+    {race=7, sex=0, life_stage=LIFE_STAGE_JUVENILE}))
+assert(matches_rule(animal{race=7, sex=0, isAdult=false, isChild=false,
+        isBaby=true},
+    {race=7, sex=0, life_stage=LIFE_STAGE_JUVENILE}))
+assert(not matches_rule(animal{race=7, sex=0, isAdult=true, isChild=false},
+    {race=7, sex=0, life_stage=LIFE_STAGE_JUVENILE}))
+assert(not matches_rule(animal{race=7, sex=0, isAdult=false, isChild=true},
+    {race=7, sex=0, life_stage=LIFE_STAGE_ADULT}))
+assert(matches_rule(animal{race=7, sex=0, isAdult=true, isChild=false},
+    {race=7, sex=0, life_stage=LIFE_STAGE_ADULT}))
+assert(matches_rule(animal{race=7, sex=0, isAdult=true, isChild=false},
+    {race=7, sex=0, life_stage=LIFE_STAGE_EITHER}))
+assert(matches_rule(animal{race=7, sex=0, isAdult=false, isChild=true},
+    {race=7, sex=0, life_stage=LIFE_STAGE_EITHER}))
+assert(matches_rule(animal{race=7, sex=0, isAdult=false, isChild=false,
+        isBaby=true},
+    {race=7, sex=0, life_stage=LIFE_STAGE_EITHER}))
+assert(not matches_rule(animal{race=7, sex=0, isAdult=false, isChild=true},
+    {race=7, sex=0, life_stage=99}))
+
+assert(rule_specificity({sex=-1, life_stage=LIFE_STAGE_EITHER}) == 0)
+assert(rule_specificity({sex=0, life_stage=LIFE_STAGE_EITHER}) == 1)
+assert(rule_specificity({sex=-1, life_stage=LIFE_STAGE_JUVENILE}) == 1)
+assert(rule_specificity({sex=0, life_stage=LIFE_STAGE_ADULT}) == 2)
+assert(rule_specificity({sex=-1}) == 1)
 
 print('selection tests passed')

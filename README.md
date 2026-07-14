@@ -13,15 +13,16 @@ Place these files in DFHack's `hack/scripts` directory:
 Restart DFHack after installing them. If DFHack is already running, enter
 `enable` with no arguments once to reload available script modules and overlays.
 
-## Adult pasture assignment
+## Pasture assignment
 
-Select a pasture and choose **Auto-assign adults**. Select a species, choose
-female, male, or either gender, and save the rule.
+Select a pasture and choose **Auto-assign animals**. Select one species, choose
+female, male, or either gender, choose juvenile, adult, or either life stage,
+and save the rule.
 
-Each pasture can have one rule. Once per in-game month, unassigned adult animals
-that match the rule are assigned to that pasture. Existing assignments are not
-changed. When rules overlap, gender-specific rules take priority over
-either-gender rules.
+Each pasture can have one rule. Once per in-game month, unassigned animals that
+match the rule are assigned to that pasture. Existing assignments are not moved
+when an animal changes life stage. When rules overlap, rules with more specific
+gender and life-stage filters take priority.
 
 ## Juvenile autocaging
 
@@ -33,7 +34,7 @@ Once per in-game month, juvenile animals are distributed across managed cages.
 Their cage assignment is removed when they become adults. Grazers, merchants,
 and animals with owners are never caged. Any of those animals already assigned
 to managed cages are released on the next check. Slaughter designations do not
-exclude animals from adult pasture or juvenile cage rules.
+exclude animals from pasture or juvenile cage rules.
 
 Rules and enabled cage pastures are stored per fortress and resume automatically
 when that fortress is loaded again.
@@ -41,7 +42,7 @@ when that fortress is loaded again.
 ## Commands
 
 ```text
-autoassign-animals now       Run adult pasture rules immediately
+autoassign-animals now       Run pasture rules immediately
 autoassign-animals status    Show the number of enabled pasture rules
 autocage-juveniles now       Run a check immediately
 autocage-juveniles status    Show the configuration and current state
