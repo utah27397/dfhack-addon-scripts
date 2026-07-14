@@ -16,15 +16,17 @@ overlay enable autocage-juveniles.cage_autocage
 DFHack stores the overlay settings, so those commands do not need to be run for
 each fortress.
 
-## Adult pasture assignment
+## Pasture assignment
 
-Open a pen/pasture zone and use **Ctrl+A: Configure adult rule**. Select a
-species and choose whether the pasture accepts females, males, or either sex.
-The rule is stored in the fortress save and checked once per in-game month.
+Open a pen/pasture zone and use **Ctrl+A: Configure pasture rule**. Select one
+species, choose female, male, or either gender, and choose juvenile, adult, or
+either life stage. The rule is stored in the fortress save and checked once per
+in-game month.
 
-The script assigns only adult animals belonging to your civilization. It skips
+The script assigns matching animals belonging to your civilization. It skips
 animals already assigned to a pasture, cage, or restraint, along with merchants.
-Sex-specific pasture rules take precedence over rules that accept either sex.
+Existing assignments are not moved when an animal changes life stage. Rules
+with more specific gender and life-stage filters take precedence.
 
 DFHack 0.47.05-r8 cannot construct the old pasture-assignment reference from
 scratch. If no animal has ever been assigned to a pasture in the current save,
@@ -40,8 +42,8 @@ disable it.
 The script cages juvenile animals and releases their assignments when they
 become adults. Grazers, merchants, and owned pets are not caged. Grazers, pets,
 adults, and dead animals already assigned to a managed cage are released on the
-next monthly check. Slaughter designations do not exclude animals from adult
-pasture or juvenile cage rules.
+next monthly check. Slaughter designations do not exclude animals from pasture
+or juvenile cage rules.
 
 This compatibility branch manages one cage pasture at a time. Enabling the
 control from a cage in another pasture moves juvenile autocaging to that
@@ -52,7 +54,7 @@ pasture.
 The GUI is the normal configuration path. These commands are also available:
 
 ```text
-autoassign-animals now       Run adult pasture assignment immediately
+autoassign-animals now       Run pasture assignment immediately
 autoassign-animals status    Show the number of enabled pasture rules
 autocage-juveniles now       Run juvenile cage assignment immediately
 autocage-juveniles status    Show the configured pasture and state

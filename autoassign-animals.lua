@@ -8,6 +8,25 @@ local widgets = require('gui.widgets')
 
 local RULE_PREFIX = 'autoassign-animals/rule/'
 local SCHEDULE_NAME = 'autoassign-animals'
+local LIFE_STAGE_ADULT = 0
+local LIFE_STAGE_JUVENILE = 1
+local LIFE_STAGE_EITHER = 2
+
+local function normalize_life_stage(life_stage)
+    if life_stage == LIFE_STAGE_JUVENILE or
+            life_stage == LIFE_STAGE_EITHER then
+        return life_stage
+    end
+    return LIFE_STAGE_ADULT
+end
+
+local function life_stage_label(life_stage)
+    return ({
+        [LIFE_STAGE_ADULT]='adult',
+        [LIFE_STAGE_JUVENILE]='juvenile',
+        [LIFE_STAGE_EITHER]='either stage',
+    })[normalize_life_stage(life_stage)]
+end
 
 rules = rules or {}
 
@@ -19,6 +38,7 @@ local function load_rules()
             entry=entry,
             race=entry.ints[2],
             sex=entry.ints[3],
+            life_stage=normalize_life_stage(entry.ints[5]),
             enabled=entry.ints[4] == 1,
         }
     end
@@ -27,13 +47,21 @@ end
 local function save_rule(zone_id, rule)
     local entry = rule.entry or dfhack.persistent.save{
         key=RULE_PREFIX..zone_id,
-        ints={zone_id, rule.race, rule.sex, rule.enabled and 1 or 0},
+        ints={
+            zone_id,
+            rule.race,
+            rule.sex,
+            rule.enabled and 1 or 0,
+            normalize_life_stage(rule.life_stage),
+        },
     }
     entry.ints[1] = zone_id
     entry.ints[2] = rule.race
     entry.ints[3] = rule.sex
     entry.ints[4] = rule.enabled and 1 or 0
+    entry.ints[5] = normalize_life_stage(rule.life_stage)
     entry:save()
+    rule.life_stage = normalize_life_stage(rule.life_stage)
     rule.entry = entry
     rules[zone_id] = rule
 end
@@ -62,14 +90,28 @@ local function get_assigned_ids()
     return assigned
 end
 
+local function matches_life_stage(unit, life_stage)
+    life_stage = normalize_life_stage(life_stage)
+    if life_stage == LIFE_STAGE_EITHER then return true end
+    if life_stage == LIFE_STAGE_JUVENILE then
+        return dfhack.units.isBaby(unit) or dfhack.units.isChild(unit)
+    end
+    return dfhack.units.isAdult(unit)
+end
+
 function matches_rule(unit, rule)
     return dfhack.units.isAnimal(unit) and
         dfhack.units.isOwnCiv(unit) and
         dfhack.units.isAlive(unit) and
-        dfhack.units.isAdult(unit) and
         not dfhack.units.isMerchant(unit) and
         unit.race == rule.race and
-        (rule.sex == -1 or unit.sex == rule.sex)
+        (rule.sex == -1 or unit.sex == rule.sex) and
+        matches_life_stage(unit, rule.life_stage)
+end
+
+function rule_specificity(rule)
+    return (rule.sex ~= -1 and 1 or 0) +
+        (normalize_life_stage(rule.life_stage) ~= LIFE_STAGE_EITHER and 1 or 0)
 end
 
 local function make_zone_ref(zone_id)
@@ -101,8 +143,9 @@ function run_cycle(quiet)
         table.insert(ordered, {zone_id=zone_id, rule=rule})
     end
     table.sort(ordered, function(a, b)
-        local a_specific, b_specific = a.rule.sex ~= -1, b.rule.sex ~= -1
-        if a_specific ~= b_specific then return a_specific end
+        local a_specific = rule_specificity(a.rule)
+        local b_specific = rule_specificity(b.rule)
+        if a_specific ~= b_specific then return a_specific > b_specific end
         return a.zone_id < b.zone_id
     end)
 
@@ -126,7 +169,7 @@ function run_cycle(quiet)
         dfhack.printerr('autoassign-animals: manually pasture one animal first')
     end
     if not quiet or assigned > 0 then
-        print(('autoassign-animals: assigned %d adult animal(s)'):format(assigned))
+        print(('autoassign-animals: assigned %d animal(s)'):format(assigned))
     end
     return true
 end
@@ -179,14 +222,19 @@ rule_view = rule_view or nil
 RuleScreen = defclass(RuleScreen, gui.FramedScreen)
 RuleScreen.ATTRS{
     focus_path='autoassign-animals/rule',
-    frame_title='Adult pasture rule',
+    frame_title='Pasture rule',
     frame_width=58,
     frame_height=24,
     zone_id=DEFAULT_NIL,
 }
 
 function RuleScreen:init()
-    local rule = rules[self.zone_id] or {race=-1, sex=-1, enabled=true}
+    local rule = rules[self.zone_id] or {
+        race=-1,
+        sex=-1,
+        life_stage=LIFE_STAGE_ADULT,
+        enabled=true,
+    }
     self:addviews{
         widgets.Label{frame={t=0}, text=('Pasture #%d species'):format(self.zone_id)},
         widgets.FilteredList{
@@ -209,9 +257,21 @@ function RuleScreen:init()
             },
             initial_option=rule.sex,
         },
+        widgets.CycleHotkeyLabel{
+            view_id='life_stage',
+            frame={b=3, l=0},
+            label='Life stage',
+            key='CUSTOM_L',
+            options={
+                {label='Either', value=LIFE_STAGE_EITHER},
+                {label='Juvenile', value=LIFE_STAGE_JUVENILE},
+                {label='Adult', value=LIFE_STAGE_ADULT},
+            },
+            initial_option=normalize_life_stage(rule.life_stage),
+        },
         widgets.ToggleHotkeyLabel{
             view_id='enabled',
-            frame={b=3, l=0},
+            frame={b=2, l=0},
             label='Automatic assignment',
             key='CUSTOM_A',
             options={
@@ -241,6 +301,7 @@ function RuleScreen:save()
     save_rule(self.zone_id, {
         race=choice.race,
         sex=self.subviews.sex:getOptionValue(),
+        life_stage=self.subviews.life_stage:getOptionValue(),
         enabled=self.subviews.enabled:getOptionValue(),
         entry=rules[self.zone_id] and rules[self.zone_id].entry,
     })
@@ -257,14 +318,14 @@ PastureRuleOverlay = defclass(PastureRuleOverlay, overlay.OverlayWidget)
 PastureRuleOverlay.ATTRS{
     default_pos={x=2, y=8},
     viewscreens='dwarfmode',
-    frame={w=30, h=2},
+    frame={w=30, h=3},
 }
 
 function PastureRuleOverlay:init()
     self:addviews{
         widgets.HotkeyLabel{
             frame={t=0, l=0},
-            label='Configure adult rule',
+            label='Configure pasture rule',
             key='CUSTOM_CTRL_A',
             on_activate=function()
                 local zone = selected_pasture()
@@ -279,10 +340,19 @@ function PastureRuleOverlay:init()
                 local zone = selected_pasture()
                 local rule = zone and rules[zone.id]
                 if not rule then return 'Rule: not configured' end
-                local sex = ({[-1]='either', [0]='female', [1]='male'})[rule.sex]
                 local species = dfhack.units.getRaceNameById(rule.race)
-                if #species > 16 then species = species:sub(1, 15)..'.' end
-                return ('Rule: %s %s'):format(species, sex)
+                if #species > 21 then species = species:sub(1, 20)..'.' end
+                return ('Species: %s'):format(species)
+            end,
+        },
+        widgets.Label{
+            frame={t=2, l=0, w=30},
+            text=function()
+                local zone = selected_pasture()
+                local rule = zone and rules[zone.id]
+                if not rule then return '' end
+                local sex = ({[-1]='either gender', [0]='female', [1]='male'})[rule.sex]
+                return ('%s / %s'):format(sex, life_stage_label(rule.life_stage))
             end,
         },
     }

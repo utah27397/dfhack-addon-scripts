@@ -97,11 +97,40 @@ assert(not should_release(animal()))
 
 local either_female = {race=7, sex=-1}
 local male_only = {race=7, sex=1}
+local LIFE_STAGE_ADULT = 0
+local LIFE_STAGE_JUVENILE = 1
+local LIFE_STAGE_EITHER = 2
+
 assert(matches_rule(animal{isAdult=true, isChild=false}, either_female))
 assert(not matches_rule(animal{isAdult=true, isChild=false}, male_only))
 assert(matches_rule(animal{isAdult=true, isChild=false, sex=1}, male_only))
 assert(not matches_rule(animal{isAdult=true, isChild=false, race=8}, either_female))
 assert(matches_rule(animal{
     isAdult=true, isChild=false, isMarkedForSlaughter=true}, either_female))
+assert(not matches_rule(animal(), either_female))
+assert(not matches_rule(animal(), {
+    race=7, sex=-1, life_stage=LIFE_STAGE_ADULT}))
+assert(matches_rule(animal{isAdult=true, isChild=false}, {
+    race=7, sex=-1, life_stage=LIFE_STAGE_ADULT}))
+assert(matches_rule(animal(), {
+    race=7, sex=-1, life_stage=LIFE_STAGE_JUVENILE}))
+assert(matches_rule(animal{isChild=false, isBaby=true}, {
+    race=7, sex=-1, life_stage=LIFE_STAGE_JUVENILE}))
+assert(not matches_rule(animal{isAdult=true, isChild=false}, {
+    race=7, sex=-1, life_stage=LIFE_STAGE_JUVENILE}))
+assert(matches_rule(animal{isAdult=true, isChild=false}, {
+    race=7, sex=-1, life_stage=LIFE_STAGE_EITHER}))
+assert(matches_rule(animal(), {
+    race=7, sex=-1, life_stage=LIFE_STAGE_EITHER}))
+assert(matches_rule(animal{isChild=false, isBaby=true}, {
+    race=7, sex=-1, life_stage=LIFE_STAGE_EITHER}))
+assert(not matches_rule(animal(), {race=7, sex=-1, life_stage=-1}))
+assert(not matches_rule(animal(), {race=7, sex=-1, life_stage=99}))
+
+assert(rule_specificity({sex=-1, life_stage=LIFE_STAGE_EITHER}) == 0)
+assert(rule_specificity({sex=0, life_stage=LIFE_STAGE_EITHER}) == 1)
+assert(rule_specificity({sex=-1, life_stage=LIFE_STAGE_JUVENILE}) == 1)
+assert(rule_specificity({sex=0, life_stage=LIFE_STAGE_ADULT}) == 2)
+assert(rule_specificity({sex=-1, life_stage=-1}) == 1)
 
 print('selection tests passed')
