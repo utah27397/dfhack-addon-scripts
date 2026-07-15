@@ -268,7 +268,7 @@ end
 
 local function in_cage_interface()
     if not selected_cage() then return false end
-    local focus = dfhack.gui.getFocusString()
+    local focus = dfhack.gui.getCurFocus(true)
     return focus:sub(1, #'dwarfmode/QueryBuilding/Some/Cage') ==
             'dwarfmode/QueryBuilding/Some/Cage' or
         focus:sub(1, #'dwarfmode/QueryBuilding/Some/Assign') ==

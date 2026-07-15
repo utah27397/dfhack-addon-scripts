@@ -188,10 +188,11 @@ local function selected_pasture()
 end
 
 local function in_pasture_interface()
-    local focus = dfhack.gui.getFocusString()
+    local focus = dfhack.gui.getCurFocus(true)
     return selected_pasture() and
-        focus:sub(1, #'dwarfmode/ZonesPenInfo') ==
-            'dwarfmode/ZonesPenInfo'
+        (focus == 'dwarfmode/Zones' or
+         focus:sub(1, #'dwarfmode/ZonesPenInfo') ==
+            'dwarfmode/ZonesPenInfo')
 end
 
 local function species_choices(selected_race)
