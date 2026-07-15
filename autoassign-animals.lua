@@ -336,24 +336,24 @@ function PastureRuleOverlay:init()
         },
         widgets.Label{
             frame={t=1, l=0, w=30},
-            text=function()
-                local zone = selected_pasture()
-                local rule = zone and rules[zone.id]
-                if not rule then return 'Rule: not configured' end
-                local species = dfhack.units.getRaceNameById(rule.race)
-                if #species > 21 then species = species:sub(1, 20)..'.' end
-                return ('Species: %s'):format(species)
-            end,
+            text={{text=function()
+                    local zone = selected_pasture()
+                    local rule = zone and rules[zone.id]
+                    if not rule then return 'Rule: not configured' end
+                    local species = dfhack.units.getRaceNameById(rule.race)
+                    if #species > 21 then species = species:sub(1, 20)..'.' end
+                    return ('Species: %s'):format(species)
+                end}},
         },
         widgets.Label{
             frame={t=2, l=0, w=30},
-            text=function()
-                local zone = selected_pasture()
-                local rule = zone and rules[zone.id]
-                if not rule then return '' end
-                local sex = ({[-1]='either gender', [0]='female', [1]='male'})[rule.sex]
-                return ('%s / %s'):format(sex, life_stage_label(rule.life_stage))
-            end,
+            text={{text=function()
+                    local zone = selected_pasture()
+                    local rule = zone and rules[zone.id]
+                    if not rule then return '' end
+                    local sex = ({[-1]='either gender', [0]='female', [1]='male'})[rule.sex]
+                    return ('%s / %s'):format(sex, life_stage_label(rule.life_stage))
+                end}},
         },
     }
 end

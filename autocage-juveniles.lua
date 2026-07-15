@@ -314,11 +314,11 @@ function CageAutocageOverlay:init()
         },
         widgets.Label{
             frame={t=1, l=0, w=32},
-            text=function()
-                local zone = pasture_for_cage(selected_cage())
-                return zone and ('Cage pasture #%d'):format(zone.id) or
-                    'Place a pasture over this cage'
-            end,
+            text={{text=function()
+                    local zone = pasture_for_cage(selected_cage())
+                    return zone and ('Cage pasture #%d'):format(zone.id) or
+                        'Place a pasture over this cage'
+                end}},
         },
     }
 end
